@@ -16,6 +16,9 @@ int main(int argc, char *argv[]) {
 	int port = 6379;
 	char *badnum;
 
+	setenv("TZ", "UTC", 0);
+	tzset();
+
 	if (argc < 2 || argc > 3) {
 		fprintf(stderr, "Usage:\t%s <host> [port]\n\tPort defaults to %d.\n", argv[0], port);
 		exit(1);
@@ -80,7 +83,7 @@ int stamp_loop(redisContext *conn) {
 	int status = -1;
 
 	raw_time = time(NULL);
-	utc_time = gmtime(&raw_time);
+	utc_time = localtime(&raw_time);
 	strftime(timestamp, sizeof(timestamp) - 1, "%Y-%m-%d %H:%M:%S %Z", utc_time);
 
 	reply = redisCommand(conn, "SET redistamp %s", timestamp);
