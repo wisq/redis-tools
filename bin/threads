@@ -1,0 +1,11 @@
+#!/bin/sh
+
+ARCH="`uname`"
+
+if [ "$ARCH" = "Linux" ]; then
+	grep ^processor /proc/cpuinfo | wc -l
+elif [ "$ARCH" = "Darwin" ]; then
+	/usr/sbin/sysctl -n hw.ncpu
+else
+	echo "Do not know how to determine concurrency for $ARCH." 1>&2
+fi
