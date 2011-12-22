@@ -51,11 +51,13 @@ void main_loop(char *host, int port) {
 
 	if (conn->err) {
 		printf("error: %s\n", conn->errstr);
+		fflush(stdout);
 		redisFree(conn);
 		return;
 	}
 
 	printf("connected.\n");
+	fflush(stdout);
 
 	while ((status = stamp_loop(conn))) {
 		if (status < 0) {
@@ -64,6 +66,7 @@ void main_loop(char *host, int port) {
 			counter -= 1;
 			if (counter <= 0) {
 				printf("Happily stamping %s.\n", host);
+				fflush(stdout);
 				counter = STATUS_SECONDS;
 			}
 		}
@@ -72,6 +75,7 @@ void main_loop(char *host, int port) {
 	}
 
 	printf("Lost connection: %s\n", conn->err ? conn->errstr : "(unknown cause)");
+	fflush(stdout);
 	redisFree(conn);
 }
 
@@ -99,10 +103,12 @@ int stamp_loop(redisContext *conn) {
 
 		case REDIS_REPLY_ERROR:
 			printf("SET redistamp \"%s\": %s\n", timestamp, reply->str);
+			fflush(stdout);
 			break;
 
 		default:
 			printf("SET redistamp \"%s\": unknown response type\n", timestamp);
+			fflush(stdout);
 			break;
 	}
 
