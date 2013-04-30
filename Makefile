@@ -15,7 +15,7 @@ src/%.o: src/%.c hiredis/hiredis.h
 	$(CC) $(CFLAGS) -o $@ $<
 
 hiredis:
-	git clone git://github.com/antirez/hiredis.git hiredis
+	git clone git://github.com/redis/hiredis.git hiredis -b v0.11.0
 
 hiredis/hiredis.h: hiredis/libhiredis.a
 
