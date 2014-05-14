@@ -1,3 +1,5 @@
 /redistamp/bin/redistamp
 /redistamp/hiredis
+/tools/gems
+/tools/.bundle
 *.o
