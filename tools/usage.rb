@@ -11,6 +11,7 @@ class RedisUsage < RedisTool
   MAX_CHILDREN = 1000 # prune tree nodes when >= 1000 children
   CHUNK_SIZE = 1000 # load rows 1000 at a time
   TROUBLE_CHECK_INTERVAL = 3.0 # check every 3 secs
+  TROUBLE_SLEEP_DELAY = 30.0 # pause for at least 30 seconds in case of trouble
   PROGRESS_INTERVAL = 60.0 # announce every minute
 
   class Node
@@ -212,7 +213,7 @@ class RedisUsage < RedisTool
       end
 
       paused = true
-      sleep(TROUBLE_CHECK_INTERVAL)
+      sleep(TROUBLE_SLEEP_DELAY)
     end
   end
 
