@@ -21,3 +21,5 @@ Monitors the Redis slow query log and outputs any new entries it sees.
 Traverses the Redis keyspace via `SCAN` and outputs guesstimates on memory usage.  It assumes that you use a colon-separated key hierarchy, e.g. "foo:bar:baz".
 
 If any tree node gets too leafy, it will prune it and just keep stats rather than filling up memory with all the sub-key names; for example, if you have 100,000 keys like `a:*` and only 50 keys like `b:*`, you'll see the usage of each individual `b:*` key, but the `a:*` keys will be rolled up into a single size for `a`.  (This happens at any level except the root, so if you have too many unique root-level prefixes, you may use a lot of memory and get a lot of output.)
+
+Since this puts a lot of load on Redis, it's meant to be run on a readonly slave rather than the master database, and will abort otherwise.
