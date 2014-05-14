@@ -4,18 +4,18 @@ require 'redis'
 require 'redis/connection/hiredis'
 require 'json'
 
-class SlowLogger
+$LOAD_PATH << File.dirname(__FILE__) + "/lib"
+require 'redis_tool'
+
+class SlowLogger < RedisTool
   class Entry < Struct.new(:id, :timestamp, :duration, :command)
     def to_json(*args)
       to_h.to_json(*args)
     end
   end
 
-  def initialize(host, port)
-    log("connecting")
-    @redis = Redis.new(:host => host, :port => port)
-    @redis.ping
-    log("connected")
+  def initialize(*args)
+    super(*args)
 
     @max_seen_id = 0
     unseen_slowlog_entries # discard previous entries prior to restart
@@ -33,11 +33,6 @@ class SlowLogger
 
   private
 
-  def log(event, params = {})
-    $stdout.puts(params.merge(:event => event).to_json)
-    $stdout.flush
-  end
-
   def output_slowlog
     unseen_slowlog_entries.each { |entry| log("slowlog", :entry => entry) }
   end
@@ -50,20 +45,4 @@ class SlowLogger
   end
 end
 
-def usage(message = nil)
-  $stderr.puts "#{$0}: #{message}" if message
-  $stderr.puts
-  $stderr.puts "Usage: #{$0} <host> [port]"
-  $stderr.puts "  port defaults to 6379"
-  $stderr.puts
-  exit(1)
-end
-
-host, port, *junk = ARGV
-port = (port || 6379).to_i
-
-usage("No host given") if host.nil?
-usage("Port #{port} is out of range") unless (1..65535).include?(port)
-usage unless junk.empty?
-
-SlowLogger.new(host, port).watch
+SlowLogger.from_argv(*ARGV).watch

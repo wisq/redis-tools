@@ -4,7 +4,10 @@ require 'redis'
 require 'redis/connection/hiredis'
 require 'json'
 
-class RedisUsage
+$LOAD_PATH << File.dirname(__FILE__) + "/lib"
+require 'redis_tool'
+
+class RedisUsage < RedisTool
   MAX_CHILDREN = 1000 # prune tree nodes when >= 1000 children
   CHUNK_SIZE = 1000 # load rows 1000 at a time
   TROUBLE_CHECK_INTERVAL = 3.0 # check every 3 secs
@@ -73,13 +76,9 @@ class RedisUsage
     end
   end
 
-  def initialize(host, port)
+  def initialize(*args)
+    super(*args)
     @last_trouble_check = Time.at(0)
-
-    log("connecting")
-    @redis = Redis.new(:host => host, :port => port)
-    @redis.ping
-    log("connected")
   end
 
   def run
@@ -230,20 +229,4 @@ class RedisUsage
   end
 end
 
-def usage(message = nil)
-  $stderr.puts "#{$0}: #{message}" if message
-  $stderr.puts
-  $stderr.puts "Usage: #{$0} <host> [port]"
-  $stderr.puts "  port defaults to 6379"
-  $stderr.puts
-  exit(1)
-end
-
-host, port, *junk = ARGV
-port = (port || 6379).to_i
-
-usage("No host given") if host.nil?
-usage("Port #{port} is out of range") unless (1..65535).include?(port)
-usage unless junk.empty?
-
-RedisUsage.new(host, port).run
+RedisUsage.from_argv(*ARGV).run
