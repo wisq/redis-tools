@@ -205,7 +205,7 @@ class RedisUsage < RedisTool
         log("aborted", :reason => "not readonly slave")
         exit(1)
       elsif io_type = io_in_progress?
-        log("paused", :reason => "I/O in progress", :type => io_type)
+        log("paused", :reason => "I/O in progress", :io_type => io_type)
       else
         log("resumed") if paused
         return
