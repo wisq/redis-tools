@@ -1,0 +1,249 @@
+#!/usr/bin/ruby
+
+require 'redis'
+require 'redis/connection/hiredis'
+require 'json'
+
+class RedisUsage
+  MAX_CHILDREN = 1000 # prune tree nodes when >= 1000 children
+  CHUNK_SIZE = 1000 # load rows 1000 at a time
+  TROUBLE_CHECK_INTERVAL = 3.0 # check every 3 secs
+  PROGRESS_INTERVAL = 60.0 # announce every minute
+
+  class Node
+    attr_reader :size
+
+    def initialize(root = false)
+      @root = root
+      @size = Size.zero
+      @children = {}
+    end
+
+    def index_recursive(parts, size)
+      @size.add(size)
+      if @children && !parts.empty?
+        if !@root && @children.count >= MAX_CHILDREN
+          @children = nil
+        else
+          (@children[parts.shift] ||= Node.new).index_recursive(parts, size)
+        end
+      end
+    end
+
+    def walk(parents = [], &block)
+      yield(self, parents)
+      @children.each { |name, node| node.walk(parents + [name], &block) } if @children
+    end
+
+    def terminated?
+      @children.nil?
+    end
+  end
+
+  class Size
+    def self.zero
+      new(nil, 0)
+    end
+
+    attr_reader :keys, :key_size, :data_size
+
+    def initialize(key, data_size)
+      if key.nil?
+        @keys = @key_size = 0
+      else
+        @keys = 1
+        @key_size = key.length
+      end
+      @data_size = data_size
+    end
+
+    def add(other)
+      @keys += other.keys
+      @key_size  += other.key_size
+      @data_size += other.data_size
+    end
+
+    def to_hash
+      {
+        :keys => @keys,
+        :key_size => @key_size,
+        :data_size => @data_size,
+        :total_size => @key_size + @data_size
+      }
+    end
+  end
+
+  def initialize(host, port)
+    @last_trouble_check = Time.at(0)
+
+    log("connecting")
+    @redis = Redis.new(:host => host, :port => port)
+    @redis.ping
+    log("connected")
+  end
+
+  def run
+    log("started")
+    check_for_trouble
+
+    @redis.info('keyspace').each do |db, info|
+      raise "unexpected db: #{db.inspect}" unless db =~ /^db(\d+)$/
+      dbnum = $1.to_i
+      info_hash = Hash[info.split(',').map { |pair| key, value = pair.split('='); [key, value.to_i] }]
+
+      log("keyspace", {:db => dbnum}.merge(info_hash))
+      @redis.select(dbnum)
+
+      total = info_hash["keys"]
+      gather_keys(total).walk do |node, path|
+        attrs = {:db => dbnum}
+        if path.empty?
+          attrs[:root] = true
+        else
+          attrs[:name] = path.join(':')
+        end
+        log("key", attrs.merge(node.size.to_hash))
+      end
+    end
+  ensure
+    log("stopped")
+  end
+
+  private
+
+  def gather_keys(total)
+    root = Node.new(true)
+    cursor = 0
+    @last_progress = Time.now
+
+    loop do
+      check_for_trouble
+      cursor, collection = @redis.scan(cursor, :count => CHUNK_SIZE)
+
+      collection.each do |key|
+        prefix, _ = key.split(/[^A-Za-z0-9:_-]/, 2)
+        parts = prefix.split(':')
+
+        root.index_recursive(parts, measure_key(key))
+      end
+
+      log_progress(root.size.keys, total)
+
+      break if cursor == "0"
+    end
+
+    root
+  end
+
+  def measure_key(key)
+    case type = @redis.type(key)
+    when 'none'
+      Size.zero
+    when 'string'
+      Size.new(key, @redis.strlen(key))
+    when 'list'
+      measure_range(key, :lrange)
+    when 'zset'
+      measure_range(key, :zrange)
+    when 'hash'
+      measure_scan(key, :hscan)
+    when 'set'
+      measure_scan(key, :sscan)
+    else
+      raise "Unknown type for #{key.inspect}: #{type.inspect}"
+    end
+  end
+
+  def measure_range(key, method)
+    cursor = 0
+    total  = 0
+    loop do
+      check_for_trouble
+      next_cursor = cursor + CHUNK_SIZE
+      values = @redis.send(method, key, cursor, next_cursor - 1)
+
+      break if values.empty?
+      total += values.inject(0) { |sum, val| sum + val.length }
+      cursor = next_cursor
+    end
+    Size.new(key, total)
+  end
+
+  def measure_scan(key, method)
+    cursor = "0"
+    total = 0
+    loop do
+      check_for_trouble
+      cursor, values = @redis.send(method, key, cursor, :count => CHUNK_SIZE)
+
+      total += values.inject(0) { |sum, val| sum + val.length }
+      break if cursor == "0"
+    end
+    Size.new(key, total)
+  end
+
+  def log(event, params = {})
+    $stdout.puts({:event => event}.merge(params).to_json)
+    $stdout.flush
+  end
+
+  def log_progress(found, expected)
+    now = Time.now
+    return unless (now - @last_progress) >= PROGRESS_INTERVAL
+    @last_progress = now
+
+    log("progress", :found => found, :expected => expected)
+  end
+
+  def check_for_trouble
+    now = Time.now
+    return unless (now - @last_trouble_check) >= TROUBLE_CHECK_INTERVAL
+    @last_trouble_check = now
+
+    paused = false
+    loop do
+      if !is_slave?
+        log("aborted", :reason => "not readonly slave")
+        exit(1)
+      elsif io_type = io_in_progress?
+        log("paused", :reason => "I/O in progress", :type => io_type)
+      else
+        log("resumed") if paused
+        return
+      end
+
+      paused = true
+      sleep(TROUBLE_CHECK_INTERVAL)
+    end
+  end
+
+  def is_slave?
+    @redis.info("replication")["role"] == "slave"
+  end
+
+  def io_in_progress?
+    info = @redis.info("persistence")
+    return "aof_rewrite" if info["aof_rewrite_in_progress"] != "0"
+    return "bgsave"  if info["rdb_bgsave_in_progress"] != "0"
+    return "loading" if info["loading"] != "0"
+    return nil
+  end
+end
+
+def usage(message = nil)
+  $stderr.puts "#{$0}: #{message}" if message
+  $stderr.puts
+  $stderr.puts "Usage: #{$0} <host> [port]"
+  $stderr.puts "  port defaults to 6379"
+  $stderr.puts
+  exit(1)
+end
+
+host, port, *junk = ARGV
+port = (port || 6379).to_i
+
+usage("No host given") if host.nil?
+usage("Port #{port} is out of range") unless (1..65535).include?(port)
+usage unless junk.empty?
+
+RedisUsage.new(host, port).run
