@@ -12,11 +12,11 @@ These use the `redis` and `hiredis` gems, and install these via the `bundler` ge
 
 Output is in JSON format, for easy integration with log monitoring solutions like Splunk.
 
-### slowlog.rb
+### redis-slowlog
 
 Monitors the Redis slow query log and outputs any new entries it sees.
 
-### usage.rb
+### redis-usage
 
 Traverses the Redis keyspace via `SCAN` and outputs guesstimates on memory usage.  It assumes that you use a colon-separated key hierarchy, e.g. "foo:bar:baz".
 

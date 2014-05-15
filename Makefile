@@ -14,4 +14,5 @@ install:
 	install -m 644 tools/.bundle/config $(PREFIX)/.bundle
 	cd $(PREFIX) && bundle check --path=$(PREFIX)/gems
 	install -m 644 tools/lib/*.rb $(PREFIX)/lib
-	install -m 755 redistamp/bin/redistamp tools/bin/*.rb $(PREFIX)/bin
+	install -m 755 redistamp/bin/redistamp tools/bin/redis-* $(PREFIX)/bin
+	ln -nsf $(PREFIX)/bin/redis* /usr/local/bin
