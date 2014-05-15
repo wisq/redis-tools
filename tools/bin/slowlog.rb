@@ -1,6 +1,6 @@
 #!/usr/bin/ruby
 
-$LOAD_PATH << File.dirname(__FILE__) + "/../lib"
+$LOAD_PATH << File.dirname(File.realpath(__FILE__)) + "/../lib"
 require 'redis_tool'
 
 class SlowLogger < RedisTool

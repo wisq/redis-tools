@@ -1,6 +1,6 @@
 #!/usr/bin/ruby
 
-REDIS_TOOLS = File.realpath(File.dirname(__FILE__) + "/..")
+REDIS_TOOLS = File.dirname(File.dirname(__FILE__))
 ENV['BUNDLE_GEMFILE'] ||= REDIS_TOOLS + "/Gemfile"
 require 'rubygems'
 require 'bundler/setup'
