@@ -10,7 +10,7 @@ clean:
 
 install:
 	mkdir -vp $(PREFIX)/bin $(PREFIX)/lib $(PREFIX)/gems
-	rsync -rt --delete-after tools/gems $(PREFIX)/gems
+	rsync -rt --delete-after tools/gems/ $(PREFIX)/gems/
 	install -m 644 tools/lib/*.rb $(PREFIX)/lib
 	install -m 644 tools/Gemfile tools/Gemfile.lock $(PREFIX)
 	install -m 755 redistamp/bin/redistamp tools/bin/*.rb $(PREFIX)/bin
