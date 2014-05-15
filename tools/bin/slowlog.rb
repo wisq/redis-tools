@@ -1,10 +1,14 @@
 #!/usr/bin/ruby
 
+ENV['BUNDLE_GEMFILE'] ||= File.dirname(__FILE__) + "/../Gemfile"
+require 'rubygems'
+require 'bundler/setup'
+
 require 'redis'
 require 'redis/connection/hiredis'
 require 'json'
 
-$LOAD_PATH << File.dirname(__FILE__) + "/lib"
+$LOAD_PATH << File.dirname(__FILE__) + "/../lib"
 require 'redis_tool'
 
 class SlowLogger < RedisTool
