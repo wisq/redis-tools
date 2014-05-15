@@ -19,7 +19,7 @@ class RedisTool
     exit(1)
   end
 
-  def self.from_argv(host, port = 6379, *junk_args)
+  def self.from_argv(host = nil, port = 6379, *junk_args)
     port = port.to_i
 
     usage("No host given") if host.nil?
