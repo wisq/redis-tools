@@ -1,14 +1,12 @@
 #!/usr/bin/ruby
 
-ENV['BUNDLE_GEMFILE'] ||= File.dirname(__FILE__) + "/../Gemfile"
+REDIS_TOOLS = File.realpath(File.dirname(__FILE__) + "/..")
+ENV['BUNDLE_GEMFILE'] ||= REDIS_TOOLS + "/Gemfile"
+ENV['BUNDLE_PATH']    ||= REDIS_TOOLS + "/gems"
 require 'rubygems'
 require 'bundler/setup'
 
-require 'redis'
-require 'redis/connection/hiredis'
-require 'json'
-
-$LOAD_PATH << File.dirname(__FILE__) + "/../lib"
+$LOAD_PATH << REDIS_TOOLS + "/lib"
 require 'redis_tool'
 
 class RedisUsage < RedisTool
