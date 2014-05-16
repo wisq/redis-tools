@@ -96,7 +96,7 @@ class RedisUsage < RedisTool
         if path.empty?
           attrs[:root] = true
         else
-          attrs[:name] = path.join(':')
+          attrs[:name] = path.join
         end
         log("key", attrs.merge(node.size.to_hash))
       end
@@ -118,7 +118,11 @@ class RedisUsage < RedisTool
 
       collection.each do |key|
         prefix, _ = key.split(/[^A-Za-z0-9:_-]/, 2)
-        parts = prefix.split(':')
+
+        parts = prefix.split /(?<=:)/ # by colon
+        if parts.count == 1
+          parts = prefix.split /(?<=[_-])/ # by dash/underscore
+        end
 
         root.index_recursive(parts, measure_key(key))
       end
