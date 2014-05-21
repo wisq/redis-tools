@@ -35,6 +35,15 @@ class RedisTool
     log("connected")
   end
 
+  def run
+    log("started")
+    run_wrapped
+  rescue Exception => e
+    log("exception", :class => e.class, :message => e.message, :backtrace => e.backtrace)
+  ensure
+    log("stopped")
+  end
+
   protected
 
   def log(event, params = {})

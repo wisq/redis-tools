@@ -78,8 +78,9 @@ class RedisUsage < RedisTool
     @last_trouble_check = Time.at(0)
   end
 
-  def run
-    log("started")
+  protected
+
+  def run_wrapped
     check_for_trouble
 
     @redis.info('keyspace').each do |db, info|
@@ -101,8 +102,6 @@ class RedisUsage < RedisTool
         log("key", attrs.merge(node.size.to_hash))
       end
     end
-  ensure
-    log("stopped")
   end
 
   private

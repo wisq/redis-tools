@@ -23,14 +23,13 @@ class SlowLogger < RedisTool
     unseen_slowlog_entries # discard previous entries prior to restart
   end
 
-  def watch
-    log("started")
+  protected
+
+  def run_wrapped
     loop do
       output_slowlog
       sleep(5)
     end
-  ensure
-    log("stopped")
   end
 
   private
@@ -47,4 +46,4 @@ class SlowLogger < RedisTool
   end
 end
 
-SlowLogger.from_argv(*ARGV).watch
+SlowLogger.from_argv(*ARGV).run
