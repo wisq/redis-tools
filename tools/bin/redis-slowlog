@@ -8,6 +8,12 @@ class SlowLogger < RedisTool
     def to_json(*args)
       to_h.to_json(*args)
     end
+
+    unless instance_methods.include?(:to_h) # Ruby 2+
+      def to_h
+        Hash[each_pair.to_a]
+      end
+    end
   end
 
   def initialize(*args)
