@@ -7,7 +7,6 @@ require 'bundler/setup'
 
 require 'redis'
 require 'redis/connection/hiredis'
-require 'json'
 
 class RedisTool
   def self.usage(message = nil)
@@ -39,7 +38,14 @@ class RedisTool
   protected
 
   def log(event, params = {})
-    $stdout.puts({:event => event}.merge(params).to_json)
+    data = {:event => event}.merge(params)
+    $stdout.puts(data.map { |k, v| "#{k}=#{log_stringify(v)}" }.join(" "))
     $stdout.flush
+  end
+
+  def log_stringify(value)
+    string = value.inspect
+    string = string.inspect unless string =~ /\A[0-9"]/ # double-inspect for arrays/hashes etc.
+    string
   end
 end

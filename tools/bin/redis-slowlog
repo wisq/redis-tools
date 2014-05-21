@@ -5,14 +5,14 @@ require 'redis_tool'
 
 class SlowLogger < RedisTool
   class Entry < Struct.new(:id, :timestamp, :duration, :command)
-    def to_json(*args)
-      to_h.to_json(*args)
-    end
-
-    unless instance_methods.include?(:to_h) # Ruby 2+
-      def to_h
-        Hash[each_pair.to_a]
-      end
+    def log_params
+      {
+        :id => id,
+        :timestamp => timestamp,
+        :duration  => duration,
+        :command => command.join(" "),
+        :command_raw => command
+      }
     end
   end
 
@@ -36,7 +36,7 @@ class SlowLogger < RedisTool
   private
 
   def output_slowlog
-    unseen_slowlog_entries.each { |entry| log("slowlog", :entry => entry) }
+    unseen_slowlog_entries.each { |entry| log("slowlog", entry.log_params) }
   end
 
   def unseen_slowlog_entries
