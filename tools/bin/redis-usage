@@ -181,11 +181,6 @@ class RedisUsage < RedisTool
     Size.new(key, total)
   end
 
-  def log(event, params = {})
-    $stdout.puts({:event => event}.merge(params).to_json)
-    $stdout.flush
-  end
-
   def log_progress(found, expected)
     now = Time.now
     return unless (now - @last_progress) >= PROGRESS_INTERVAL
