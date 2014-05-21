@@ -38,6 +38,8 @@ class RedisTool
   def run
     log("started")
     run_wrapped
+  rescue SignalException => e
+    log("signal", :name => e.message, :number => e.signo, :location => e.backtrace.first)
   rescue Exception => e
     log("exception", :class => e.class, :message => e.message, :backtrace => e.backtrace)
   ensure
