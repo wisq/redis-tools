@@ -19,7 +19,7 @@ class SlowLogger < RedisTool
   def initialize(*args)
     super(*args)
 
-    @max_seen_id = 0
+    @max_seen_id = -1
     unseen_slowlog_entries # discard previous entries prior to restart
   end
 
