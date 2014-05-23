@@ -25,7 +25,7 @@ class SlowLogger < RedisTool
       if command.last =~ /\A\.\.\. \((\d+) more arguments\)\z/
         command.count + $1.to_i - 2 # minus command (first) and "more arguments" (last)
       else
-        command.count
+        command.count - 1 # minus command
       end
     end
   end
