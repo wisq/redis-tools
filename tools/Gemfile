@@ -2,3 +2,4 @@ source 'https://www.rubygems.org'
 
 gem 'hiredis'
 gem 'redis'
+gem 'dogstatsd-ruby'

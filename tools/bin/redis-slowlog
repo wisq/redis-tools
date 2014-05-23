@@ -3,6 +3,8 @@
 $LOAD_PATH << File.dirname(File.realpath(__FILE__)) + "/../lib"
 require 'redis_tool'
 
+require 'statsd'
+
 class SlowLogger < RedisTool
   class Entry < Struct.new(:id, :timestamp, :duration, :command)
     def log_params
@@ -14,32 +16,57 @@ class SlowLogger < RedisTool
         :command_raw => command
       }
     end
+
+    def command_name
+      command.first
+    end
+
+    def arg_count
+      if command.last =~ /\A\.\.\. \((\d+) more arguments\)\z/
+        command.count + $1.to_i - 2 # minus command (first) and "more arguments" (last)
+      else
+        command.count
+      end
+    end
   end
 
   def initialize(*args)
     super(*args)
-
     @max_seen_id = -1
-    unseen_slowlog_entries # discard previous entries prior to restart
+
+    @statsd = Statsd.new
+    @statsd.tags = ["port:#{@redis.client.port}"]
+    if instance = ENV['REDIS_INSTANCE']
+      @statsd.tags << "instance:#{instance}"
+    end
   end
 
   protected
 
   def run_wrapped
+    unseen_slowlog_entries(1) # discard prior entries
+
     loop do
-      output_slowlog
+      output_slowlog(unseen_slowlog_entries)
       sleep(5)
     end
   end
 
   private
 
-  def output_slowlog
-    unseen_slowlog_entries.each { |entry| log("slowlog", entry.log_params) }
+  def output_slowlog(entries)
+    entries.each do |entry|
+      log("slowlog", entry.log_params)
+
+      opts = {:tags => ["command:#{entry.command_name}"]}
+      @statsd.increment('redis.slowlog.count', opts)
+      @statsd.histogram('redis.slowlog.duration',  entry.duration,  opts)
+      @statsd.histogram('redis.slowlog.arguments', entry.arg_count, opts)
+    end
   end
 
-  def unseen_slowlog_entries
-    unseen  = @redis.slowlog('get', '1000').take_while { |id, *_| id > @max_seen_id }
+  def unseen_slowlog_entries(count = 1000)
+    unseen  = @redis.slowlog('get', count).take_while { |id, *_| id > @max_seen_id }
     entries = unseen.reverse.map { |data| Entry.new(*data) }
     @max_seen_id = entries.last.id unless entries.empty?
     entries
