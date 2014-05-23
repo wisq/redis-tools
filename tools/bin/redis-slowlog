@@ -6,26 +6,29 @@ require 'redis_tool'
 require 'statsd'
 
 class SlowLogger < RedisTool
-  class Entry < Struct.new(:id, :timestamp, :duration, :command)
-    def log_params
-      {
-        :id => id,
-        :timestamp => timestamp,
-        :duration  => duration,
-        :command => command.join(" "),
-        :command_raw => command
-      }
-    end
+  class Entry < Struct.new(:id, :timestamp, :duration, :command_name, :arguments, :command, :command_raw)
 
-    def command_name
-      command.first
-    end
+    def initialize(id, timestamp, duration, command)
+      super(id, timestamp, duration)
 
-    def arg_count
+      self.command_name = command.first
+      self.command      = command.join(' ')
+      self.command_raw  = command
+
       if command.last =~ /\A\.\.\. \((\d+) more arguments\)\z/
-        command.count + $1.to_i - 2 # minus command (first) and "more arguments" (last)
+        self.arguments = command.count + $1.to_i - 2 # minus command (first) and "more arguments" (last)
       else
-        command.count - 1 # minus command
+        self.arguments = command.count - 1 # minus command (first)
+      end
+    end
+
+    def log_params
+      to_h
+    end
+
+    unless instance_methods.include?(:to_h) # Ruby 2+
+      def to_h
+        Hash[each_pair.to_a]
       end
     end
   end
@@ -61,7 +64,7 @@ class SlowLogger < RedisTool
       opts = {:tags => ["command:#{entry.command_name}"]}
       @statsd.increment('redis.slowlog.count', opts)
       @statsd.histogram('redis.slowlog.duration',  entry.duration,  opts)
-      @statsd.histogram('redis.slowlog.arguments', entry.arg_count, opts)
+      @statsd.histogram('redis.slowlog.arguments', entry.arguments, opts)
     end
   end
 
