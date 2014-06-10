@@ -1,0 +1,72 @@
+#!/usr/bin/ruby
+
+$LOAD_PATH << File.dirname(File.realpath(__FILE__)) + "/../lib"
+require 'redis_tool'
+
+require 'statsd'
+
+class ExpiredKeys < RedisTool
+  class Entry
+    attr_reader :db, :keys, :expires, :avg_ttl
+
+    def initialize(db, raw_keyspace)
+      @db = db
+      parse(raw_keyspace)
+    end
+
+    def keys_expired_delta
+      @keys - @expires
+    end
+
+    def parse(raw)
+      raw.split(",").each do |key|
+        metric = key.split("=")
+        case metric[0]
+        when 'keys'
+          @keys     = metric[1].to_i
+        when 'expires'
+          @expires  = metric[1].to_i
+        when 'avg_ttl'
+          @avg_ttl  = metric[1].to_i
+        end
+      end
+    end
+  end
+
+  def initialize(*args)
+    super(*args)
+
+    @statsd = Statsd.new
+    @statsd.tags = ["port:#{@redis.client.port}"]
+    if instance = ENV['REDIS_INSTANCE']
+      @statsd.tags << "instance:#{instance}"
+    end
+  end
+
+  protected
+
+  def run_wrapped
+    loop do
+      output_expiraton_delta(processed_keyspace)
+      sleep(5)
+    end
+  end
+
+  private
+
+  def output_expiraton_delta(entries)
+    entries.each do |entry|
+      log("keyspace_delta", entry.log_params)
+
+      opts = {:tags => ["redis_db:#{entry.db}"]}
+      @statsd.guage('redis.expired_keys.delta', entry.keys_expired_delta, opts)
+    end
+  end
+
+  def processed_keyspace
+    keyspace = @redis.info('keyspace')
+    keyspace.map { |db,keys| Event.new(db,keys) }
+  end
+end
+
+ExpiredKeys.from_argv(*ARGV).run
