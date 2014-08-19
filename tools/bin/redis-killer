@@ -1,0 +1,155 @@
+#!/usr/bin/ruby
+
+$LOAD_PATH << File.dirname(File.realpath(__FILE__)) + "/../lib"
+require 'redis_tool'
+
+class RedisKiller < RedisTool
+  CHUNK_SIZE = 1000 # load rows 1000 at a time
+  PROGRESS_INTERVAL = 15.0 # announce every 15 secs
+
+  protected
+
+  def run_wrapped
+    @redis.info('keyspace').each do |db, info|
+      raise "unexpected db: #{db.inspect}" unless db =~ /^db(\d+)$/
+      @dbnum = $1.to_i
+      info_hash = Hash[info.split(',').map { |pair| key, value = pair.split('='); [key, value.to_i] }]
+
+      log("keyspace", {:db => @dbnum}.merge(info_hash))
+      @redis.select(@dbnum)
+
+      total = info_hash["keys"]
+      kill_em_all(total)
+    end
+  end
+
+  private
+
+  def kill_em_all(total)
+    cursor = 0
+    count = 0
+    index = 0
+    @last_progress = Time.now
+
+    begin
+      cursor, collection = @redis.scan(cursor, :count => CHUNK_SIZE)
+
+      collection.each do |key|
+        # --------------------------------------------
+        # CUT HERE CUT HERE CUT HERE CUT HERE CUT HERE
+        # --------------------------------------------
+        if key.include?('\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\')
+          log('del', describe(key: key))
+          @redis.del(key)
+        elsif key.start_with?('resque:queue:')
+          walk_list(key) do |entry|
+            if entry.length >= 1_000_000
+              log('del', describe(key: key, entry: entry))
+              @redis.lrem(key, 0, entry) # 0 = delete all matching
+            end
+          end
+        elsif key == 'hypothetical_hash'
+          walk_hash(key) do |field, value|
+            if value == "delete me"
+              log('hdel', describe(key: key, field: field, value: value))
+              @redis.hdel(key, field)
+            end
+          end
+        elsif key == 'hypothetical_set'
+          walk_set(key) do |member|
+            if member.include?('unwanted')
+              log('srem', describe(key: key, member: member))
+              @redis.srem(key, member)
+            end
+          end
+        elsif key == 'hypothetical_sorted_set'
+          walk_sorted_set(key) do |member, score|
+            if score > 9000
+              log('zrem', describe(key: key, member: member))
+              @redis.zrem(key, member)
+            end
+          end
+        end
+        # --------------------------------------------
+        # CUT HERE CUT HERE CUT HERE CUT HERE CUT HERE
+        # --------------------------------------------
+      end
+
+      count += collection.count
+      log_progress(count, total)
+    end until cursor == "0"
+  end
+
+  def log_progress(found, expected)
+    now = Time.now
+    return unless (now - @last_progress) >= PROGRESS_INTERVAL
+    @last_progress = now
+
+    log("progress", :found => found, :expected => expected)
+  end
+
+  def walk_list(key, &block)
+    log('list_enter', describe(key: key))
+    offset = count = 0
+    begin
+      new_offset = offset + CHUNK_SIZE
+      values = @redis.lrange(key, offset, new_offset - 1)
+      offset = new_offset
+
+      values.each(&block)
+      count += values.count
+    end until values.empty?
+    log('list_exit', describe(key: key, count: count))
+  end
+
+  def walk_hash(key, &block)
+    log('hash_enter', describe(key: key))
+    cursor = count = 0
+    begin
+      cursor, entries = @redis.hscan(key, cursor, :count => CHUNK_SIZE)
+      entries.each(&block)
+      count += entries.count
+    end until cursor == "0"
+    log('hash_exit', describe(key: key, count: count))
+  end
+
+  def walk_set(key, &block)
+    log('set_enter', describe(key: key))
+    cursor = count = 0
+    begin
+      cursor, entries = @redis.sscan(key, cursor, :count => CHUNK_SIZE)
+      entries.each(&block)
+      count += entries.count
+    end until cursor == "0"
+    log('set_exit', describe(key: key, count: count))
+  end
+
+  def walk_sorted_set(key, &block)
+    log('sorted_set_enter', describe(key: key))
+    cursor = count = 0
+    begin
+      cursor, entries = @redis.zscan(key, cursor, :count => CHUNK_SIZE)
+      entries.each(&block)
+      count += entries.count
+    end until cursor == "0"
+    log('sorted_set_exit', describe(key: key, count: count))
+  end
+
+  def describe(params)
+    output = params.map do |key, value|
+      if value.kind_of?(String)
+        [[key, abbreviate(value)], [:"#{key}_size", value.bytesize]]
+      else
+        [[key, value]]
+      end
+    end
+    Hash[output.flatten(1)]
+  end
+
+  def abbreviate(value)
+    value = value[0,100] + '...' if value.length > 100
+    value
+  end
+end
+
+RedisKiller.from_argv(*ARGV).run
