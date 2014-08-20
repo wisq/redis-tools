@@ -1,6 +1,11 @@
 #!/usr/bin/ruby
 
-$LOAD_PATH << File.dirname(File.realpath(__FILE__)) + "/../lib"
+# Example of a tool for cleaning out Redis.
+# Must be manually programmed in order to be useful.
+# Copy this file to somewhere else, then replace
+# the 'CUT HERE' section below with your own code.
+
+$LOAD_PATH << '/usr/local/redis-tools/lib'
 require 'redis_tool'
 
 class RedisKiller < RedisTool
@@ -35,9 +40,11 @@ class RedisKiller < RedisTool
       cursor, collection = @redis.scan(cursor, :count => CHUNK_SIZE)
 
       collection.each do |key|
+
         # --------------------------------------------
         # CUT HERE CUT HERE CUT HERE CUT HERE CUT HERE
         # --------------------------------------------
+
         if key.include?('\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\')
           log('del', describe(key: key))
           @redis.del(key)
@@ -70,9 +77,11 @@ class RedisKiller < RedisTool
             end
           end
         end
+
         # --------------------------------------------
         # CUT HERE CUT HERE CUT HERE CUT HERE CUT HERE
         # --------------------------------------------
+
       end
 
       count += collection.count
