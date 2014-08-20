@@ -70,6 +70,7 @@ void main_loop() {
 	int status;
 
 	printf("Connecting to Redis on %s, port %d ... ", host, port);
+	fflush(stdout);
 
 	conn = redisConnectWithTimeout(host, port, timeout);
 
@@ -85,17 +86,16 @@ void main_loop() {
 
 	while ((status = stamp_loop(conn))) {
 		if (status < 0) {
-			fflush(stdout);
 			counter = STATUS_SECONDS;
 		} else {
 			counter -= 1;
 			if (counter <= 0) {
 				printf("Happily stamping %s.\n", host);
-				fflush(stdout);
 				counter = STATUS_SECONDS;
 			}
 		}
 
+		fflush(stdout);
 		sleep(1);
 	}
 
