@@ -178,7 +178,9 @@ int check_replication_lag(redisContext *conn, time_t time_secs) {
 	switch (reply->type) {
 		case REDIS_REPLY_STRING:
 			timestamp = atoi(reply->str);
-			if (timestamp > 0) {
+			/* Ignore timestamps under 10k because they're probably "2014",
+			 * before we added the raw timestamp to the start. */
+			if (timestamp > 10000) {
 				lag = time_secs - timestamp;
 				snprintf(buf, sizeof(buf) - 1, "redis.redistamp.lag:%ld|g|#port=%d", lag, port);
 				if (sendto(statsd_sock, buf, strlen(buf), 0, (struct sockaddr *) &statsd_addr, sizeof(statsd_addr)) < 0) {
