@@ -1,6 +1,6 @@
 HIREDIS_VERSION=0.10.1
 
-CFLAGS  = -Ihiredis -std=gnu99 -pedantic -c -O3 -fPIC -Wall -Werror
+CFLAGS  = -Ihiredis -std=gnu99 -c -O3 -fPIC -Wall -Werror
 LDFLAGS = -Werror
 
 all: bin/redistamp
