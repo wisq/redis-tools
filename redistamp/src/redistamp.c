@@ -182,7 +182,7 @@ int check_replication_lag(redisContext *conn, time_t time_secs) {
 			 * before we added the raw timestamp to the start. */
 			if (timestamp > 10000) {
 				lag = time_secs - timestamp;
-				snprintf(buf, sizeof(buf) - 1, "redis.redistamp.lag:%ld|g|#port=%d", lag, port);
+				snprintf(buf, sizeof(buf) - 1, "redis.redistamp.lag:%ld|g|#port:%d", lag, port);
 				if (sendto(statsd_sock, buf, strlen(buf), 0, (struct sockaddr *) &statsd_addr, sizeof(statsd_addr)) < 0) {
 					perror("sendto");
 				}
