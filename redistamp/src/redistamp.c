@@ -14,12 +14,17 @@
 void main_loop();
 int stamp_loop(redisContext *conn);
 int check_replication_lag(redisContext *conn, time_t time_secs);
+void mode_switch(int new_mode);
 
 struct sockaddr_in statsd_addr;
 int statsd_sock;
 
 char *host;
 int port = 6379;
+
+#define MASTER_MODE 1
+#define SLAVE_MODE 2
+int mode = 0;
 
 int main(int argc, char *argv[]) {
 	char *badnum;
@@ -90,7 +95,7 @@ void main_loop() {
 		} else {
 			counter -= 1;
 			if (counter <= 0) {
-				printf("Happily stamping %s.\n", host);
+				printf("Happily %s %s.\n", mode == MASTER_MODE ? "stamping" : "monitoring", host);
 				counter = STATUS_SECONDS;
 			}
 		}
@@ -121,6 +126,7 @@ int stamp_loop(redisContext *conn) {
 	switch (reply->type) {
 		case REDIS_REPLY_STATUS:
 			if (!strncmp(reply->str, "OK", 3)) {
+				mode_switch(MASTER_MODE);
 				status = 1;
 				break;
 			}
@@ -128,6 +134,7 @@ int stamp_loop(redisContext *conn) {
 
 		case REDIS_REPLY_ERROR:
 			if (!strncmp("READONLY ", reply->str, 9)) {
+				mode_switch(SLAVE_MODE);
 				status = check_replication_lag(conn, raw_time);
 			} else {
 				printf("SET redistamp \"%s\": %s\n", timestamp, reply->str);
@@ -141,6 +148,21 @@ int stamp_loop(redisContext *conn) {
 
 	freeReplyObject(reply);
 	return status;
+}
+
+void mode_switch(int new_mode) {
+	if (mode == new_mode)
+		return;
+
+	switch (new_mode) {
+		case MASTER_MODE: printf("Now in master mode (stamping).\n"); break;
+		case SLAVE_MODE:  printf("Now in slave mode (monitoring).\n"); break;
+		default:
+			printf("mode_switch: Unknown mode %d\n", mode);
+			return;
+	}
+
+	mode = new_mode;
 }
 
 int check_replication_lag(redisContext *conn, time_t time_secs) {
