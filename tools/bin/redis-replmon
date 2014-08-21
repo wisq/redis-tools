@@ -1,0 +1,119 @@
+#!/usr/bin/ruby
+
+$LOAD_PATH << File.dirname(File.realpath(__FILE__)) + "/../lib"
+require 'redis_tool'
+
+require 'json'
+require 'statsd'
+
+class RedisReplicationMonitor
+  def self.usage(message = nil)
+    $stderr.puts "#{$0}: #{message}" if message
+    $stderr.puts
+    $stderr.puts "Usage: #{$0} <replmon.json> <instance>"
+    $stderr.puts
+    exit(1)
+  end
+
+  def self.from_argv(def_file = nil, instance = nil, *junk_args)
+    usage("No definitions JSON file given") if def_file.nil?
+    usage("No instance gives") if instance.nil?
+    usage unless junk_args.empty?
+
+    new(def_file, instance)
+  end
+
+  def initialize(file, inst_name)
+    @warnings = []
+
+    definitions = JSON.load(File.read(file))
+    instance = definitions[inst_name]
+    failure "Definition not found: #{inst_name}; available instances: #{definitions.keys.inspect}" unless instance
+
+    @name   = inst_name
+    @vip    = instance["vip"]    or failure "No VIP configured"
+    @port   = instance["port"]   or failure "No port configured"
+    @nodes  = instance["nodes"]  or failure "No nodes configured"
+    @slaves = instance["slaves"] or failure "No slave count configured"
+
+    @statsd = Statsd.new
+    @statsd.tags = ["instance:#{@name}", "vip:#{@vip}", "port:#{@port}"]
+  end
+
+  def run
+    redis = connect(@vip, @port)
+    check_replication(redis)
+
+    puts "OKAY |"
+    dump_warnings
+    exit(0)
+  rescue SystemExit
+    raise
+  rescue Exception => e
+    puts "ERROR |"
+    puts "#{e.message} (#{e.class})"
+    puts e.backtrace.join("\n\t")
+    dump_warnings
+    exit(2)
+  end
+
+  def check_replication(redis)
+    replication = redis.info('replication')
+    failure "Redis is not master" unless replication['role'] == 'master'
+
+    master_offset = replication['master_repl_offset'].to_i
+    @statsd.gauge('redis.replmon.offset', master_offset)
+
+    slave_count = 0
+    replication.each do |key, value|
+      next unless key.start_with?('slave')
+
+      slave = Hash[value.split(',').map { |field| field.split('=', 2) }]
+      slave_addr = "#{slave['ip']}:#{slave['port']}"
+
+      known_slave = @nodes.include?(slave['ip']) && slave['port'].to_i == @port
+
+      opts = {:tags => ["slave:#{slave_addr}", "known:#{known_slave}"]}
+      @statsd.gauge('redis.replmon.slave.lag', slave['lag'], opts)
+      @statsd.gauge('redis.replmon.slave.offset', slave['offset'].to_i, opts)
+      @statsd.gauge('redis.replmon.slave.offset.delta', master_offset - slave['offset'].to_i, opts)
+
+      if known_slave
+        slave_count += 1 if slave['state'] == 'online'
+      else
+        warning "Unknown slave: #{slave_addr}"
+      end
+    end
+    failure "Incorrect number of slaves: expected #{@slaves}, got #{slave_count}" unless @slaves == slave_count
+  end
+
+  def connect(ip, port)
+    redis = Redis.new(:host => ip, :port => port)
+    redis.ping
+    redis
+  rescue => e
+    failure "Failed to connect to Redis on #{ip}", e
+  end
+
+  def failure(message, error = nil)
+    prefix = "Redis/#{@name}: " if @name
+    message += ": #{error.message} (#{error.class})" if error
+
+    puts "FAIL |"
+    puts "FAIL: #{prefix}#{message}"
+    dump_warnings
+    exit(2)
+  end
+
+  def warning(message)
+    @warnings << message
+  end
+
+  def dump_warnings
+    @warnings.each do |warn|
+      puts "WARNING: #{warn}"
+    end
+  end
+end
+
+RedisReplicationMonitor.from_argv(*ARGV).run

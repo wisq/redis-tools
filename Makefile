@@ -15,7 +15,7 @@ install:
 	cd $(PREFIX) && bundle check --path=$(PREFIX)/gems
 	install -m 644 tools/lib/*.rb $(PREFIX)/lib
 	install -m 755 redistamp/bin/redistamp tools/bin/redis-* $(PREFIX)/bin
-	install -m 755 tools/example/redis-* $(PREFIX)/example
+	install -m 755 tools/example/* $(PREFIX)/example
 	ln -nsf $(PREFIX)/bin/redis* /usr/local/bin
 	# old artefact
 	rm -f $(PREFIX)/bin/redis-killer
