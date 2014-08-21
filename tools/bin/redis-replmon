@@ -42,16 +42,15 @@ class RedisReplicationMonitor
 
   def run
     redis = connect(@vip, @port)
-    check_replication(redis)
+    slaves = check_replication(redis)
 
-    puts "OKAY |"
+    puts "OKAY: Redis/#{@name}: #{slaves} active slaves |"
     dump_warnings
     exit(0)
   rescue SystemExit
     raise
   rescue Exception => e
-    puts "ERROR |"
-    puts "#{e.message} (#{e.class})"
+    puts "ERROR: #{e.message} (#{e.class}) |"
     puts e.backtrace.join("\n\t")
     dump_warnings
     exit(2)
@@ -99,8 +98,7 @@ class RedisReplicationMonitor
     prefix = "Redis/#{@name}: " if @name
     message += ": #{error.message} (#{error.class})" if error
 
-    puts "FAIL |"
-    puts "FAIL: #{prefix}#{message}"
+    puts "FAIL: #{prefix}#{message} |"
     dump_warnings
     exit(2)
   end
