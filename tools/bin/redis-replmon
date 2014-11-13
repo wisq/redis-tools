@@ -83,7 +83,7 @@ class RedisReplicationMonitor
         warning "Unknown slave: #{slave_addr}"
       end
     end
-    failure "Incorrect number of slaves: expected #{@slaves}, got #{slave_count}" unless @slaves == slave_count
+    failure "Incorrect number of slaves: expected #{@slaves}, got #{slave_count}" unless @slaves <= slave_count
     slave_count
   end
 
