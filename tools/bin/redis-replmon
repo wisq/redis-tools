@@ -87,7 +87,7 @@ class RedisReplicationMonitor
     return slave_count if @slave == slave_count
 
     message = "Incorrect number of slaves: expected #{@slaves}, got #{slave_count}"
-    failure message if @slave > slave_count
+    failure message if @slaves > slave_count
     warning message
   end
 
