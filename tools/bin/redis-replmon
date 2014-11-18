@@ -24,7 +24,7 @@ class RedisReplicationMonitor
   end
 
   def initialize(file, inst_name)
-    @warnings = []
+    @notices = []
 
     definitions = JSON.load(File.read(file))
     instance = definitions[inst_name]
@@ -45,14 +45,14 @@ class RedisReplicationMonitor
     slaves = check_replication(redis)
 
     puts "OKAY: Redis/#{@name}: #{slaves} active slaves |"
-    dump_warnings
+    dump_notices
     exit(0)
   rescue SystemExit
     raise
   rescue Exception => e
     puts "ERROR: #{e.message} (#{e.class}) |"
     puts e.backtrace.join("\n\t")
-    dump_warnings
+    dump_notices
     exit(2)
   end
 
@@ -80,11 +80,15 @@ class RedisReplicationMonitor
       if known_slave
         slave_count += 1 if slave['state'] == 'online'
       else
-        warning "Unknown slave: #{slave_addr}"
+        notice "Unknown slave: #{slave_addr}"
       end
     end
-    failure "Incorrect number of slaves: expected #{@slaves}, got #{slave_count}" unless @slaves == slave_count
-    slave_count
+
+    return slave_count if @slaves == slave_count
+
+    message = "Incorrect number of slaves: expected #{@slaves}, got #{slave_count}"
+    failure message if @slaves > slave_count
+    warning message
   end
 
   def connect(ip, port)
@@ -100,16 +104,23 @@ class RedisReplicationMonitor
     message += ": #{error.message} (#{error.class})" if error
 
     puts "FAIL: #{prefix}#{message} |"
-    dump_warnings
+    dump_notices
     exit(2)
   end
 
   def warning(message)
-    @warnings << message
+    prefix = "Redis/#{@name}: " if @name
+    puts "WARNING: #{prefix}#{message} |"
+    dump_notices
+    exit(1)
   end
 
-  def dump_warnings
-    @warnings.each do |warn|
+  def notice(message)
+    @notices << message
+  end
+
+  def dump_notices
+    @notices.each do |warn|
       puts "WARNING: #{warn}"
     end
   end
